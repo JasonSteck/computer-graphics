@@ -1,0 +1,280 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+
+<title>Computer Graphics - Jason Steck</title>
+
+<link rel="stylesheet" type="text/css" href="mystyle.css">
+<script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="materials.js"></script>
+<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
+
+<!-- code skeleton borrowed from http://learningwebgl.com/blog/?p=239 rather than using the class's skeleton -->
+<script id="phong-vs" type="x-shader/x-vertex">
+    uniform mat4 modelViewMatrix;
+    uniform mat4 projectionMatrix;
+    uniform vec4 diffuseProduct;
+
+    attribute vec4 vPosition;
+    attribute vec4 vNormal;
+
+    varying highp vec4 fPosition;
+    varying highp vec4 N;
+
+    /* for texture coordinates */
+    uniform highp float hasTexture;
+    varying float s, t;
+
+    void main(void) {
+        gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+        
+        fPosition = vPosition;
+        N = vNormal;
+
+        if(hasTexture==1.0)
+        {
+            float pi = acos(0.0);
+            s= 0.5*acos(vPosition.x)/pi;
+            t = 0.5*asin(vPosition.y/sqrt(1.0-vPosition.x*vPosition.x))/pi;
+        }
+    }
+</script>
+<script id="phong-fs" type="x-shader/x-fragment">
+    uniform highp vec4 ambientProduct, diffuseProduct, specularProduct;
+    uniform highp vec4 lightPosition;
+    uniform highp float emissive;
+    uniform highp float intensity;
+    uniform highp vec4 eyePosition;
+    uniform highp float shininess;
+    uniform highp mat4 modelViewMatrix;
+    uniform highp mat4 projectionMatrix;
+    uniform highp mat3 normalMatrix;
+
+    varying highp vec4 fPosition;
+    varying highp vec4 N;
+
+    /* for texture coordinates */
+    uniform highp float hasTexture;
+    varying highp float s, t; 
+    uniform sampler2D texture;
+
+    void main(void) {
+        highp vec3 pos = (modelViewMatrix * fPosition).xyz;
+
+        highp vec3 L = lightPosition.xyz - pos;
+        highp vec3 E = vec3(eyePosition.xyz - pos);
+
+        highp vec3 l = normalize(L);
+        highp vec3 n = normalize(normalMatrix * N.xyz);
+        highp vec3 e = normalize(E); // e and v
+        highp vec3 v = e;
+
+        highp vec3 R = reflect(l, n);
+        highp vec3 h = normalize(l + e);
+
+        highp float d = length(lightPosition.xyz - pos);
+        /*  
+        highp float attenuation = 1.0/(.01 + .02*d+0.03*d*d);
+        /*/ highp float attenuation = 1.0/(.001 + .001*d+.001*d*d); //*/
+
+        highp float diffuseLambert = dot(l, n);
+        highp float Ambientintensity = intensity + intensity;
+        highp vec4 DiffuseLightintensity = vec4(intensity, intensity, intensity, 1.0); 
+        highp float Specularintensity = intensity;
+
+        highp float Ks = pow(max(dot(n, h), 0.0), shininess); // dot(R, v) -> dot(n, h)
+        highp vec4 specular = Ks * specularProduct;    
+        if( dot(l, n) < 0.0 )
+           specular = vec4(0.0, 0.0, 0.0, 1.0);
+    
+        // Handle texture
+        if(hasTexture==1.0)
+        {
+            gl_FragColor = texture2D( texture, vec2(s, t));
+        }
+        else
+        {
+            if(emissive == 0.0)
+                gl_FragColor = vec4(
+                            (attenuation * ambientProduct * Ambientintensity + 
+                             attenuation * diffuseLambert * diffuseProduct * DiffuseLightintensity +
+                             attenuation * specular * Specularintensity).xyz, 
+                            1.0); //vColor.a); //alpha
+            else
+                gl_FragColor = vec4(
+                            (ambientProduct).xyz, 
+                            1.0); //vColor.a); //alpha
+        }
+    }
+</script>
+
+<script id="gouraud-vs" type="x-shader/x-vertex">
+// assume both position and normal are in homogeneous form
+attribute vec4 vPosition;
+attribute vec4 vNormal;
+
+varying vec4 fColor;
+
+uniform vec4 ambientProduct, diffuseProduct, specularProduct;
+uniform vec4 lightPosition;
+uniform float emissive;
+uniform float intensity;
+uniform vec4 eyePosition;
+uniform float shininess;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform mat3 normalMatrix;
+
+void main()
+{
+    // get vertex position in eye coordinates
+    vec3 pos = (modelViewMatrix * vPosition).xyz;
+    
+    // vector from vertex position to light source
+    vec3 L = normalize(lightPosition.xyz - pos);
+
+    // Determine the vector from the vertex position to the eye
+    vec3 E = normalize(eyePosition.xyz - pos);
+    
+    // halfway vector
+    vec3 H = normalize( L + E );
+
+    // Transform vertex normal into eye coordinates
+    vec3 N = normalize(normalMatrix*vNormal.xyz);
+
+    float d = length(lightPosition.xyz - pos);
+    /*  
+    float attenuation = 1.0/(.01 + .02*d+0.03*d*d);
+    /*/ float attenuation = 1.0/(.001 + .001*d+.001*d*d); //*/
+
+    float Ambientintensity = intensity + intensity;
+    float diffuseLambert = dot(L, N);
+    vec4 DiffuseLightintensity = vec4(intensity, intensity, intensity, 1.0); 
+    float Specularintensity = intensity;
+
+    // Compute terms in the illumination equation
+    vec4 ambient = ambientProduct;
+
+    float Kd = max(dot(L, N), 0.0);
+    vec4  diffuse = Kd*diffuseProduct;
+
+    float Ks = pow(max(dot(N, H), 0.0), shininess);
+    vec4  specular = Ks * specularProduct;
+    
+
+    if( dot(L, N) < 0.0 ) {
+       specular = vec4(0.0, 0.0, 0.0, 1.0);
+    } 
+
+    gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+
+    if(emissive==0.0)
+        fColor = vec4((attenuation * ambient * Ambientintensity + 
+                 attenuation * diffuse * DiffuseLightintensity + 
+                 attenuation * specular * Specularintensity).xyz, 1.0);
+    else
+        fColor = vec4(ambient.xyz, 1.0);
+
+    //fColor.a = 1.0;
+}
+</script>
+<script id="gouraud-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec4 fColor;
+
+    void main(void) {
+        gl_FragColor = fColor;
+    }
+</script>
+
+<script type="text/javascript" src="./initShaders.js"></script>
+<script type="text/javascript" src="./extraMatrixUtils.js"></script>
+<script type="text/javascript" src="./sphere.js"></script>
+<script type="text/javascript" src="./tileFloor.js"></script>
+<script type="text/javascript" src="./snowman.js"></script>
+<script type="text/javascript" src="./script.js"></script>
+</head>
+<body>
+    <div class="container">
+        <canvas id="gl-canvas" width="512" height="512">
+            Oops ... your browser doesn't support the HTML5 canvas element
+        </canvas> 
+        <div id="controls">
+            <h1> Computer Graphics - Jason Steck </h1>
+            <table>
+                <tr>
+                    <td></td>
+                    <td> <u>General Controls</u> </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <button id = "LightFollow" onclick="light.follow = !light.follow; lastEye = camera.eye.slice(0);">Toggle Light-to-Follow</button>
+                        <button id= "resetPos" onclick="resetPos()"> (R)eset Position </button>
+                    </td>
+                </tr>
+                <tr><td>&nbsp</td></tr>
+                <tr>
+                    <td></td>
+                    <td> <u>Light</u> </td>
+                </tr>
+                <tr>
+                    <td> intensity:<br/><output id="lightintval"></output> </td>
+                    <td> 0<input id="lightint" class="slider" type="range" min="0" max="1000" def="315"/>1 </td>
+                </tr>
+                <tr>
+                    <td> X:<br/><output id="lightxval"></output> </td>
+                    <td> -50<input id="lightx" class="slider" type="range" min="-50000" max="50000" def="0"/>50 </td>
+                </tr>
+                <tr>
+                    <td> Y:<br/><output id="lightyval"></output> </td>
+                    <td> -50<input id="lighty" class="slider" type="range" min="-50000" max="50000" def="21000"/>50 </td>
+                </tr>
+                <tr>
+                    <td> Z:<br/><output id="lightzval"></output> </td>
+                    <td> -50<input id="lightz" class="slider" type="range" min="-50000" max="50000" def="19000"/>50 </td>
+                </tr>
+                <tr><td>&nbsp</td></tr>
+                <tr>
+                    <td></td>
+                    <td> <u>Camera</u> </td>
+                </tr>
+                <tr>
+                    <td> X:<br/><output id="camxval"></output> </td>
+                    <td> -200<input id="camx" class="slider" type="range" min="-200000" max="200000" def="0"/>200 </td>
+                </tr>
+                <tr>
+                    <td> Y:<br/><output id="camyval"></output> </td>
+                    <td> -50<input id="camy" class="slider" type="range" min="-50000" max="200000" def="10000"/>200 </td>
+                </tr>
+                <tr>
+                    <td> Z:<br/><output id="camzval"></output> </td>
+                    <td> -200<input id="camz" class="slider" type="range" min="-200000" max="200000" def="30000"/>200 </td>
+                </tr>
+                <tr><td>&nbsp</td></tr>
+                <tr>
+                    <td></td>
+                    <td> <u>Look At</u> </td>
+                </tr>
+                <tr>
+                    <td> X:<br/><output id="lookxval"></output> </td>
+                    <td> -75<input id="lookx" class="slider" type="range" min="-75000" max="75000" def="0"/>75 </td>
+                </tr>
+                <tr>
+                    <td> Y:<br/><output id="lookyval"></output> </td>
+                    <td> -50<input id="looky" class="slider" type="range" min="-50000" max="200000" def="13000"/>200 </td>
+                </tr>
+                <tr>
+                    <td> Z:<br/><output id="lookzval"></output> </td>
+                    <td> -75<input id="lookz" class="slider" type="range" min="-75000" max="75000" def="-30000"/>75 </td>
+                </tr>
+            </table>
+        </div>
+        <span class="stretch"></span>
+    </div>
+
+</canvas>
+</body>
+</html>

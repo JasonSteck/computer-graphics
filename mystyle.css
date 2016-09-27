@@ -1,0 +1,46 @@
+.container{
+	text-align: justify;
+    -ms-text-justify: distribute-all-lines;
+    text-justify: distribute-all-lines;
+}
+
+#gl-canvas, #controls {
+    vertical-align: top;
+    display: inline-block;
+    *display: inline;
+    zoom: 1
+}
+.stretch {
+    width: 100%;
+    display: inline-block;
+    font-size: 0;
+    line-height: 0
+}
+
+#gl-canvas
+{
+	border:1px solid #000000;
+	margin: 1em;
+	float: left;
+}
+
+#controls
+{
+	padding: 1em;
+	text-align: center;
+	vertical-align:middle;
+	float:left;
+}
+#controls>table{
+	width: 100%;
+}
+#controls>table tr td:first-of-type{
+	width:50px;
+}
+
+.slider
+{
+	width: 70%;
+	padding-top:15px;
+	vertical-align:middle;
+}
